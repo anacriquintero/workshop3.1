@@ -1,0 +1,64 @@
+version: '3.8'  # Especifica la versión de Docker Compose
+
+services:  # Contenedores a ejecutar
+  zookeeper:  # Primer contenedor (Servicio)
+    image: confluentinc/cp-zookeeper:latest  # Imagen de Docker para Zookeeper
+    container_name: zookeeper  # Nombre del contenedor
+    environment:  # Variables de entorno
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:  # Mapea el puerto 2181 desde el host al contenedor
+      - 2181:2181
+
+  kafka-test:  # Segundo contenedor (Servicio)
+    image: confluentinc/cp-kafka:latest  # Imagen de Docker para Kafka
+    container_name: kafka-test  # Nombre del contenedor
+    depends_on:
+      - zookeeper  # Kafka depende de Zookeeper
+    environment:
+      KAFKA_BROKER_ID: 1  # Identificador único para este broker de Kafka
+      KAFKA_ZOOKEEPER_CONNECT: 'zookeeper:2181'  # Información de conexión para Zookeeper
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_INTERNAL:PLAINTEXT  # Protocolos de seguridad
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092,PLAINTEXT_INTERNAL://broker:29092  # Puntos finales publicitados
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+    ports:
+      - "9092:9092"  # Puerto para conectar desde el host
+    expose:
+      - "9093"
+
+  postgresdb_workshop3_ETL:
+    container_name: postgresdb_workshop3_ETL
+    image: postgres:16.2-alpine3.19
+    volumes:
+      - postgres-db-volume-kafka:/var/lib/postgresql/data  # Mapea el volumen para la base de datos
+    env_file:
+      - ./docker-secrets  # Archivo de variables de entorno
+    ports:
+      - 54321:5432  # Mapea el puerto de PostgreSQL
+    networks:
+      - kafka_workshop3_ETL  # Conexión a la red
+    environment:
+      - POSTGRES_INITDB_ARGS=--encoding=UTF8
+      - POSTGRES_DB=workshop3_ETL  # Base de datos a crear
+
+  pgadmin_workshop3_ETL:
+    container_name: pgadmin_workshop3_ETL
+    image: dpage/pgadmin4:latest
+    volumes:
+      - pgadmin_workshop3_ETL:/var/lib/pgadmin  # Asegúrate de que el nombre del volumen sea correcto
+    env_file:
+      - ./docker-secrets-pgadmin  # Archivo de variables de entorno para pgAdmin
+    ports:
+      - 6080:80  # Mapea el puerto de pgAdmin
+    links:
+      - postgresdb_workshop3_ETL  # Conecta a la base de datos PostgreSQL
+
+volumes:  # Definición de volúmenes
+  postgres-db-volume-kafka: {}
+  pgadmin_workshop3_ETL: {}  # Define el volumen pgadmin aquí con el nombre correcto
+
+networks:  # Definición de redes
+  kafka_workshop3_ETL:
+    driver: bridge  # Utiliza el driver de puente
